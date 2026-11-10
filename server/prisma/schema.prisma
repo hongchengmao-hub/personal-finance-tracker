@@ -1,0 +1,153 @@
+// Database schema for the Personal Finance Tracker.
+//
+// Naming: models and fields are camelCase in TypeScript (User, passwordHash),
+// but @@map / @map store them as snake_case in Postgres (users, password_hash).
+// That keeps the raw SQL we write for the dashboard (M9) clean and conventional.
+//
+// Money is always stored as an integer number of cents (amountCents = 1250 means $12.50)
+// to avoid floating-point rounding bugs.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------- Enums ----------
+
+enum TransactionType {
+  EXPENSE
+  INCOME
+}
+
+enum Frequency {
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+// ---------- Tables ----------
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  isDemo       Boolean  @default(false) @map("is_demo")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // One user has many of each of these (one-to-many relations).
+  categories     Category[]
+  transactions   Transaction[]
+  budgets        Budget[]
+  recurringRules RecurringRule[]
+  chatUsage      ChatUsage[]
+
+  @@map("users")
+}
+
+model Category {
+  id        Int             @id @default(autoincrement())
+  userId    Int             @map("user_id")
+  name      String          @db.VarChar(50)
+  type      TransactionType
+  color     String          @db.VarChar(7) // hex color like "#4F46E5"
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  // Deleting a user deletes their categories.
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  transactions   Transaction[]
+  budgets        Budget[]
+  recurringRules RecurringRule[]
+
+  // A user can't have two "Groceries" expense categories.
+  @@unique([userId, name, type])
+  @@map("categories")
+}
+
+model Transaction {
+  id              Int             @id @default(autoincrement())
+  userId          Int             @map("user_id")
+  categoryId      Int             @map("category_id")
+  type            TransactionType
+  amountCents     Int             @map("amount_cents") // always positive; type says in or out
+  date            DateTime        @db.Date // calendar date only, no time or time zone
+  description     String          @db.VarChar(255)
+  note            String?
+  recurringRuleId Int?            @map("recurring_rule_id") // set when created from a recurring rule
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Restrict: the database refuses to delete a category that still has transactions.
+  // The API turns that into a 409 Conflict in M5.
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  // If a recurring rule is deleted, keep its past transactions but unlink them.
+  recurringRule RecurringRule? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+
+  // Indexes for the most common queries: "my transactions in this date range"
+  // and "my transactions in this category".
+  @@index([userId, date])
+  @@index([userId, categoryId])
+  // Lets the recurring job check "already generated for this date?" quickly (M8).
+  @@index([recurringRuleId, date])
+  @@map("transactions")
+}
+
+model Budget {
+  id                Int @id @default(autoincrement())
+  userId            Int @map("user_id")
+  categoryId        Int @map("category_id")
+  monthlyLimitCents Int @map("monthly_limit_cents")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  // One monthly limit per category; the same limit applies every month.
+  @@unique([userId, categoryId])
+  @@map("budgets")
+}
+
+model RecurringRule {
+  id          Int             @id @default(autoincrement())
+  userId      Int             @map("user_id")
+  categoryId  Int             @map("category_id")
+  type        TransactionType
+  amountCents Int             @map("amount_cents")
+  description String          @db.VarChar(255)
+  frequency   Frequency
+  startDate   DateTime        @map("start_date") @db.Date
+  nextDueDate DateTime        @map("next_due_date") @db.Date
+  endDate     DateTime?       @map("end_date") @db.Date
+  isActive    Boolean         @default(true) @map("is_active")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  transactions Transaction[]
+
+  @@index([userId, isActive, nextDueDate])
+  @@map("recurring_rules")
+}
+
+// Counts AI chat messages per user per day, so we can enforce a daily cap (M15).
+model ChatUsage {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @map("user_id")
+  date         DateTime @db.Date
+  messageCount Int      @default(0) @map("message_count")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@map("chat_usage")
+}

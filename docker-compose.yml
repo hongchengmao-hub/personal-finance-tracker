@@ -1,0 +1,24 @@
+# Local PostgreSQL for development. Start with: docker compose up -d
+services:
+  db:
+    image: postgres:17
+    container_name: finance-tracker-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: finance
+      POSTGRES_PASSWORD: finance
+      POSTGRES_DB: finance_tracker
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Runs once on first start: creates a separate database for tests (used in M3).
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U finance -d finance_tracker']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

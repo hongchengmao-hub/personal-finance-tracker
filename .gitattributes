@@ -1,0 +1,2 @@
+# Keep LF line endings on every OS so Prettier and git agree on Windows.
+* text=auto eol=lf
