@@ -10,3 +10,8 @@ server/src/generated/
 Thumbs.db
 .vscode/*
 !.vscode/extensions.json
+
+# Personal notes and local Claude Code guidance (not shared)
+CLAUDE.md
+docs/PLAN.md
+docs/TECH-NOTES.md
