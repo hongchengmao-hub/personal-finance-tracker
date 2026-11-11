@@ -13,9 +13,12 @@ export default function setup() {
       stdio: 'pipe',
     });
   } catch (error) {
-    // Only show Prisma's output when something went wrong (e.g. Docker is not running).
-    const { stdout, stderr } = error as { stdout?: Buffer; stderr?: Buffer };
-    console.error(String(stdout ?? ''), String(stderr ?? ''));
-    throw new Error('Could not migrate the test database. Is Docker running?', { cause: error });
+    // Show Prisma's own explanation (e.g. "Can't reach database server") as plain text.
+    // Attaching the raw error as `cause` would make Vitest print its output as byte arrays.
+    const { stderr } = error as { stderr?: Buffer };
+    // eslint-disable-next-line preserve-caught-error -- Prisma's message is copied into ours
+    throw new Error(
+      `Could not migrate the test database. Is Docker running?\n\n${String(stderr ?? '')}`,
+    );
   }
 }
