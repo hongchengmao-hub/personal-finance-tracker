@@ -16,6 +16,8 @@ export default defineConfig({
     env: {
       NODE_ENV: 'test',
       DATABASE_URL: testDatabaseUrl,
+      // A fixed secret, so tests don't depend on the one in your .env.
+      JWT_SECRET: 'test-only-secret-that-is-at-least-32-characters-long',
     },
     // Runs once before all tests: brings the test database schema up to date.
     globalSetup: ['tests/setup/globalSetup.ts'],

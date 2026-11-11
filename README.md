@@ -4,7 +4,7 @@ Full-stack app for tracking expenses and income, budgets, recurring bills, spend
 
 **Stack:** React + TypeScript · Node.js + Express + TypeScript · PostgreSQL + Prisma · Zod · AWS
 
-> Status: Milestone 3 (error handling and test base) complete.
+> Status: Milestone 4 (authentication) complete.
 
 ## Prerequisites
 
@@ -21,8 +21,9 @@ docker compose up -d
 cd server
 npm install
 
-# 3. Create your local env file
+# 3. Create your local env file, then set JWT_SECRET in it to a long random string:
 cp .env.example .env        # Windows PowerShell: Copy-Item .env.example .env
+node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 
 # 4. Create the database tables and load starter data
 npm run db:migrate          # applies migrations in prisma/migrations
@@ -34,6 +35,19 @@ npm run dev
 
 Check it: open <http://localhost:4000/health>, which should return `{"status":"ok","database":"up", ...}`.
 If Postgres is not running it returns HTTP 503 with `"database":"down"`.
+
+## Authentication
+
+Accounts use email and password. Passwords are hashed with bcrypt. On register or login, the API
+sets a JWT in an `httpOnly` cookie named `token` (valid for 1 day), and the browser sends it with
+every request.
+
+| Endpoint                  | What it does                                    |
+| ------------------------- | ----------------------------------------------- |
+| `POST /api/auth/register` | Create an account and log in (201)              |
+| `POST /api/auth/login`    | Log in (200); wrong email or password gives 401 |
+| `POST /api/auth/logout`   | Clear the cookie (204)                          |
+| `GET /api/auth/me`        | The logged-in user, or 401                      |
 
 ## Tests
 
